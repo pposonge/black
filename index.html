@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<!-- Help Drawer v2 (auto-contrast) injected by ChatGPT on 2025-11-02 -->
+<style>
+  .help-icon-btn{
+    min-width:36px; height:36px; padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    border: none; background: transparent; cursor: pointer;
+    color: var(--help-icon-color, currentColor);
+  }
+  .help-icon-btn svg{ width:22px; height:22px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+  .help-icon-btn:focus{ outline: 2px solid currentColor; outline-offset: 2px; border-radius: 8px; }
+  .help-icon-btn:hover{ opacity:.9 }
+
+  .help-backdrop{
+    position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+    z-index: 9998;
+  }
+  .help-drawer{
+    --help-bg: #ffffff;
+    --help-fg: #111111;
+    position: fixed; top: 0; right: 0; height: 100svh;
+    width: min(760px, 92vw); transform: translateX(100%);
+    background: var(--help-bg); color: var(--help-fg);
+    box-shadow: -2px 0 20px rgba(0,0,0,.35);
+    transition: transform .25s ease; z-index: 9999; display: flex; flex-direction: column;
+  }
+  .help-drawer .help-header{
+    display:flex; align-items:center; gap:8px; padding:12px 16px; 
+    border-bottom: 1px solid rgba(0,0,0,.08);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.04), rgba(0,0,0,0));
+    color: var(--help-fg) !important;
+  }
+  .help-drawer .help-title{ font-weight:700; font-size: 16px; letter-spacing:.2px; }
+  .help-drawer .close-btn{ margin-left:auto; background: transparent; border:none; color: var(--help-fg) !important; font-size:22px; cursor:pointer; line-height:1;}
+  .help-drawer .help-body{ flex:1; min-height:0; }
+  .help-drawer iframe{ width:100%; height:100%; border:0; background: transparent; color-scheme: light dark; }
+  .help-open .help-backdrop{ opacity:1; pointer-events:auto; }
+  .help-open .help-drawer{ transform: translateX(0%); }
+
+  @media (prefers-color-scheme: dark){
+    .help-drawer{
+      --help-bg: #0f0f10;
+      --help-fg: #f2f2f2;
+    }
+    .help-drawer .help-header{ border-bottom-color: rgba(255,255,255,.08); background: linear-gradient(to bottom, rgba(255,255,255,0.04), rgba(255,255,255,0)); }
+  }
+</style>
+<script>
+(function(){
+  const HELP_URL = "https://pposonge.github.io/BDSM/help.html";
+  const SVG_BOOK = '<svg viewBox="0 0 24 24" aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4a2 2 0 0 1 2-2h6a4 4 0 0 1 4 4v14a4 4 0 0 0-4-4H4a2 2 0 0 0-2 2z"></path><path d="M22 20V4a2 2 0 0 0-2-2h-6a4 4 0 0 0-4 4v14a4 4 0 0 1 4-4h6a2 2 0 0 1 2 2z"></path></svg>';
+
+  function parseRGB(str){
+    const m = (str||"").match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    if(!m) return {r:255,g:255,b:255};
+    return {r:+m[1], g:+m[2], b:+m[3]};
+  }
+  function luminance({r,g,b}){
+    // sRGB to linear
+    const srgb = [r,g,b].map(v=>v/255).map(v=>v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055, 2.4));
+    return 0.2126*srgb[0]+0.7152*srgb[1]+0.0722*srgb[2];
+  }
+  function pickContrast(bg){
+    const L = luminance(bg);
+    // return dark icon for light bg, light icon for dark bg
+    return (L > 0.5) ? "#111111" : "#f5f5f5";
+  }
+
+  function detectBg(el){
+    let cur = el;
+    while(cur && cur !== document.documentElement){
+      const cs = getComputedStyle(cur);
+      const bc = cs.backgroundColor;
+      if(bc && bc !== "rgba(0, 0, 0, 0)" && bc !== "transparent"){
+        return parseRGB(bc);
+      }
+      cur = cur.parentElement;
+    }
+    // fallback to body/html
+    const b1 = parseRGB(getComputedStyle(document.body).backgroundColor);
+    const b2 = parseRGB(getComputedStyle(document.documentElement).backgroundColor);
+    // Prefer body unless fully transparent
+    return luminance(b1) !== luminance({r:0,g:0,b:0}) || getComputedStyle(document.body).backgroundColor !== "rgba(0, 0, 0, 0)" ? b1 : b2;
+  }
+
+  function ensureDrawer(){
+    if(document.getElementById("helpDrawer")) return;
+    const backdrop = document.createElement("div");
+    backdrop.className = "help-backdrop";
+    backdrop.id = "helpBackdrop";
+
+    const drawer = document.createElement("aside");
+    drawer.className = "help-drawer";
+    drawer.id = "helpDrawer";
+    drawer.setAttribute("role","dialog");
+    drawer.setAttribute("aria-modal","true");
+    drawer.setAttribute("aria-labelledby","helpTitle");
+
+    const header = document.createElement("div");
+    header.className = "help-header";
+    const title = document.createElement("div");
+    title.id = "helpTitle";
+    title.className = "help-title";
+    title.textContent = "도움말";
+    const close = document.createElement("button");
+    close.className = "close-btn";
+    close.setAttribute("aria-label","닫기");
+    close.textContent = "×";
+    close.addEventListener("click", closeHelp);
+    header.appendChild(title); header.appendChild(close);
+
+    const body = document.createElement("div");
+    body.className = "help-body";
+    const frame = document.createElement("iframe");
+    frame.id = "helpFrame";
+    frame.setAttribute("title","도움말");
+    body.appendChild(frame);
+
+    drawer.appendChild(header);
+    drawer.appendChild(body);
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(drawer);
+
+    backdrop.addEventListener("click", closeHelp);
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape") closeHelp();
+    });
+  }
+
+  function openHelp(){
+    ensureDrawer();
+    document.documentElement.classList.add("help-open");
+    const frame = document.getElementById("helpFrame");
+    if(frame && !frame.getAttribute("src")){
+      frame.setAttribute("src", HELP_URL);
+    }
+    setTimeout(()=>{
+      const drawer = document.getElementById("helpDrawer");
+      drawer?.querySelector(".close-btn")?.focus();
+    }, 0);
+  }
+  function closeHelp(){
+    document.documentElement.classList.remove("help-open");
+  }
+
+  // Export for compatibility
+  window.openReadme = openHelp;
+  window.openHelpSlide = openHelp;
+
+  document.addEventListener("DOMContentLoaded", function(){
+    // 1) Upgrade existing help buttons
+    const controls = Array.from(document.querySelectorAll("button,a")).filter(el=>{
+      const t = (el.textContent||"").trim();
+      const title = (el.getAttribute("title")||"").toLowerCase();
+      const aria = (el.getAttribute("aria-label")||"").toLowerCase();
+      const cls = (el.className||"").toLowerCase();
+      return /readme|도움말|help/.test(title) || /readme|도움말|help/.test(aria) || /help|readme/.test(cls) || /❓|ⓘ|📖/.test(t);
+    });
+
+    let toolbar = document.querySelector(".toolbar-actions, .top-right, header .actions, .header-actions");
+    if(controls.length === 0){
+      if(toolbar){
+        const btn = document.createElement("button");
+        btn.className = "help-icon-btn";
+        btn.setAttribute("title","도움말 열기");
+        btn.setAttribute("aria-label","도움말 열기");
+        btn.innerHTML = SVG_BOOK;
+        btn.addEventListener("click", openHelp);
+        toolbar.appendChild(btn);
+        controls.push(btn);
+      }
+    } else {
+      controls.forEach(el=>{
+        el.removeAttribute("href"); el.removeAttribute("target"); el.removeAttribute("rel");
+        el.onclick = null;
+        el.addEventListener("click", function(e){ e.preventDefault(); openHelp(); });
+        el.classList.add("help-icon-btn");
+        el.setAttribute("title","도움말 열기");
+        el.setAttribute("aria-label","도움말 열기");
+        el.innerHTML = SVG_BOOK;
+      });
+    }
+
+    // 2) Auto-contrast for icon color based on toolbar/background
+    const anchor = toolbar || controls[0] || document.body;
+    const bg = detectBg(anchor);
+    const iconColor = pickContrast(bg);
+    controls.forEach(el=>{
+      el.style.setProperty("--help-icon-color", iconColor);
+    });
+
+    // 3) Set drawer theme explicit high-contrast if page theme is dark
+    const isDarkPage = luminance(detectBg(document.body)) < 0.5;
+    const drawerProbe = document.createElement("div");
+    drawerProbe.style.display = "none";
+    document.body.appendChild(drawerProbe);
+    ensureDrawer();
+    const drawer = document.getElementById("helpDrawer");
+    if(isDarkPage){
+      drawer.style.setProperty("--help-bg","#0f0f10");
+      drawer.style.setProperty("--help-fg","#f2f2f2");
+    }else{
+      drawer.style.setProperty("--help-bg","#ffffff");
+      drawer.style.setProperty("--help-fg","#111111");
+    }
+  });
+})();
+</script>
+
+
+
+
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>검은사막 선원관리 V3.0 (by.검은사막 라밤길드 ChaKanE)</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚓</text></svg>'>
+<style>
+/* ---------- THEME ---------- */
+:root{
+  --bg:#ffffff; --fg:#111827; --muted:#6b7280;
+  --header-bg:#111827; --header-fg:#ffffff;
+  --card:#ffffff; --border:#e5e7eb; --soft:#f7fafc;
+  --primary:#2563eb; --secondary:#4b5563;
+  --cyan:#00ffff; --pink:#ffc0cb; --green:#90ee90; --yellow:#ffff00; --red:#ff0000;
+  --preset-accent:#3b82f6; --preset-soft:rgba(59,130,246,.15);
+ --content-max:1347px;  --input-font:18px; }
+html[data-theme="dark"]{
+  --bg:#0f172a; --fg:#e5e7eb; --muted:#94a3b8;
+  --header-bg:#111827; --header-fg:#ffffff;
+  --card:#0b1220; --border:#1f2937; --soft:#0f172a;
+  --primary:#2563eb; --secondary:#334155;
+}
+
+/* ---------- Globals ---------- */
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans KR,Arial;background:var(--bg);color:var(--fg)}
+a.btn, a.btn:link, a.btn:visited, a.btn:hover, a.btn:active{ text-decoration:none }
+
+/* ---------- Header (sticky) ---------- */
+header{
+  background:var(--header-bg); color:var(--header-fg);
+  padding:8px 0; position:sticky; top:0; z-index:100;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+h1{font-size:18px;margin:0}
+.container{max-width:var(--content-max);margin:0 auto;padding:14px}
+footer{color:var(--muted);font-size:12px;text-align:right;margin-top:6px}
+
+/* ---------- Buttons ---------- */
+.btn{border:0;border-radius:10px;padding:8px 12px;color:#fff;background:var(--primary);cursor:pointer;font-weight:700;font-size:14px;display:inline-flex;align-items:center;line-height:1.2}
+.btn.star{min-width:40px;justify-content:center}
+.btn.secondary{background:var(--secondary);color:#fff}
+.btn.load{background:#64748b}
+.btn.save{background:#14b8a6}
+.btn.ghost{background:transparent;color:#fff;border:1px solid #fff}
+
+/* ---------- Header toolbar (2x2 grid) ---------- */
+.header-wrap{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;max-width: var(--content-max);margin:0 auto;padding:0 14px;width:100%}
+/* Grid: left(1fr) | center(auto) | right(1fr) */
+.toolbar{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;grid-template-areas:'title actions' 'summary preset';row-gap: calc(8px + 0.5em); column-gap:10px; align-items:center; width:100%}
+
+
+
+/* 좌측: 요약 */
+.header-summary{
+  font-size:16px;font-weight:800;color:#f1f5f9;margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  padding:4px 10px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(255,255,255,.06);backdrop-filter:saturate(140%) blur(2px)
+}
+html[data-theme="dark"] .header-summary{color:#e5e7eb}
+
+/* 프리셋 캡슐 (center pinned) */
+.preset-group{display:flex;gap:8px;align-items:center;background:var(--preset-soft);padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.15);flex-wrap:nowrap}
+html[data-theme="dark"] #presetSelect{background:#fff;color:#111;border-color:rgba(0,0,0,.12)}
+
+/* 프리셋 색버튼(작게) */
+.preset-swatches{
+  display:flex;gap:8px;align-items:center;flex-direction:row-reverse;
+  /* 고정 폭: 10개 스와치 기준 (18px) + 9개 간격(8px) ≈ 252px → 여유 포함 */
+  min-width:260px;justify-content:flex-start
+}
+.swatch{width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.15);cursor:pointer}
+html[data-theme="dark"] .swatch{border-color:#0b1220}
+.swatch[aria-selected="true"]{outline:2px solid #ffffff;outline-offset:2px}
+
+/* ---------- Notice / Sections ---------- */
+.notice{font-size:12px;color:#111;background:#eef2ff;border:1px solid #c7d2fe;padding:8px;border-radius:10px;margin:12px auto 8px}
+html[data-theme="dark"] .notice{color:#111}
+
+.section{overflow:hidden; background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:16px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.section-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.section-title{display:flex;align-items:center;gap:8px;font-weight:800}
+.section-title .sec-count{background:#eef2ff;border:1px solid #c7d2fe;color:#374151;padding:2px 8px;border-radius:999px;font-weight:700}
+.section-grid{display:grid;grid-template-rows:auto auto;gap:10px}
+.panel{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff;display:flex;flex-direction:column;min-height:0}
+html[data-theme="dark"] .panel{background:#0b1220}
+.panel h3{margin:0 0 8px 0;font-size:14px;color:#374151}
+html[data-theme="dark"] .panel h3{color:#cbd5e1}
+
+/* ---------- Tables ---------- */
+.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:#fff;max-width:100%}
+
+table{border-collapse:collapse;width:100%;min-width:900px;table-layout:auto}
+th,td{border:1px solid var(--border);padding:6px;text-align:center;background:#fff;position:relative}
+html[data-theme="dark"] th, html[data-theme="dark"] td{background:#0b1220}
+th{background:#f8fafc;font-weight:800;user-select:none;white-space:nowrap}
+html[data-theme="dark"] th{background:#0f172a}
+th.sortable{cursor:pointer}
+td input,th input{width:100%;padding:6px;border:1px solid #d1d5db;border-radius:6px;text-align:center;background:#fff;color:#111}
+html[data-theme="dark"] td input, html[data-theme="dark"] th input{background:#0b1220;color:#e5e7eb;border-color:#334155}
+
+.sort-ind{font-size:11px;margin-left:4px;opacity:.8}
+.badge{position:absolute;right:6px;bottom:4px;font-size:11px;font-weight:800;padding:0 6px;border-radius:8px;background:#111827;color:#fff;opacity:.85}
+.cell-cyan{background:var(--cyan)!important}
+.cell-pink{background:var(--pink)!important}
+.cell-green{background:var(--green)!important}
+.level-yellow{background:var(--yellow)!important}
+.row-mark td{box-shadow: inset 0 0 0 9999px rgba(255,255,0,0.16)}
+.mark-dot{position:absolute;left:15px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:var(--red)}
+.small{color:#64748b;font-size:12px}
+.name-col{min-width:140px}.level-col{min-width:80px}.actions-col{min-width:200px}
+.onboard-col{width:56px; min-width:56px}
+.row-onboard td{box-shadow: inset 0 0 0 9999px rgba(37,99,235,0.06) }
+
+/* ---------- Modal ---------- */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:120}
+.modal.show{display:flex}
+.modal-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.modal-card{position:relative;width:min(520px,92vw);max-height:80vh;background:#fff;border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.2);display:flex;flex-direction:column;overflow:hidden}
+html[data-theme="dark"] .modal-card{background:#0b1220}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:#f7fafc}
+html[data-theme="dark"] .modal-head{background:#0f172a}
+.modal-body{padding:12px 16px;overflow:auto;max-height:calc(80vh - 112px)}
+.modal-foot{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)}
+.modal-close{background:transparent;border:0;font-weight:800;cursor:pointer}
+.input{width:100%;padding:8px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#111}
+html[data-theme="dark"] .input{background:#0b1220;color:#e5e7eb;border-color:#334155}
+.select{padding:8px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#111}
+html[data-theme="dark"] .select{background:#0b1220;color:#e5e7eb;border-color:#334155}
+.inline{display:flex;gap:8px;align-items:center}
+.form-row{display:grid;grid-template-columns:1fr 140px;gap:8px;align-items:center;margin-bottom:8px}
+#baseModal .form-row{display:grid;grid-template-columns:110px 1fr}
+#baseModal label{color:var(--muted);font-weight:600}
+.input,.select{height:36px}
+.small-btn{padding:6px 10px;border-radius:8px;font-size:12px;height:32px}
+
+/* Mobile */
+@media (max-width:640px){
+  .form-row{grid-template-columns:1fr}
+  #baseModal .form-row{grid-template-columns:1fr}
+  
+}
+
+/* New toolbar grid areas */
+.toolbar-summary{grid-area:summary;justify-self:start}
+.toolbar-preset{grid-area:preset;justify-self:end;overflow:visible}
+.toolbar-actions{grid-area:actions;justify-self:end;display:flex;gap:8px;align-items:center;justify-content:flex-end}
+
+/* Mobile: stack summary → preset → actions */
+@media (max-width:640px){.toolbar{grid-template-columns:1fr;grid-template-rows:auto auto auto;grid-template-areas:'actions' 'summary' 'preset'}
+}
+
+.toolbar-title{grid-area:title;align-self:end}
+.toolbar-title h1{margin:0;font-size:18px;line-height:1.2}
+
+.preset-group{padding:4px 10px}
+.toolbar{gap:8px}  /* tighten row/col gap */
+
+/* If you still want things tighter, drop to 6px: .toolbar{gap:6px} */
+
+/* ===== Header spacing: +0.5em vertically (minimal) ===== */
+.toolbar{ row-gap: calc(8px + 0.5em); }
+/* Optionally nudge title a touch too: */
+/* .toolbar-title{ margin-bottom: 0.25em; } */
+
+
+/* ===== Preset bar: keep width as if 10 swatches are visible ===== */
+.preset-group{ flex-wrap:nowrap; }
+.preset-group > *{ flex:0 0 auto; } /* prevent auto growth/shrink on children */
+.preset-swatches{
+  display:flex; gap:8px; align-items:center; flex-direction:row-reverse;
+  /* Fixed width equal to 10 swatches width; avoids layout shift when count changes */
+  flex: 0 0 260px; width:260px; max-width:260px; justify-content:flex-start;
+}
+#presetSelect{ min-width:108px; }
+@media (max-width:640px){ .preset-swatches{ flex:0 1 auto; width:auto; max-width:100%; } }
+
+
+/* ===== Modal typography & buttons polish ===== */
+.modal-card, .modal-head, .modal-body, .modal-foot { font-family: inherit; font-size: 14px; }
+#attrsModal .form-row{ grid-template-columns: 1fr 110px 36px; align-items: center; }
+#attrsModal .form-row .attr-check{ display:flex; justify-content:center; align-items:center; }
+.small-btn{ padding:6px 10px; border-radius:8px; font-size:12px; height:32px; border:1px solid var(--border); background:var(--secondary); color:#fff; }
+.small-btn.danger{ background:#ef4444; color:#fff; border-color:#dc2626; }
+.small-btn.ghost{ background:transparent; color:var(--fg); border:1px solid var(--border); }
+.modal .help{ color: var(--muted); font-size: 12px; }
+
+
+/* ===== Attrs modal footer tidy ===== */
+#attrsModal .foot-row{display:flex;justify-content:space-between;align-items:flex-start;margin-top:8px;gap:8px}
+#attrsModal .foot-row .help{white-space:pre-line;line-height:1.5}
+#attrsModal .foot-row .btns{display:flex;gap:8px;flex-wrap:wrap}
+
+
+/* ===== Attrs modal compact & reordered ===== */
+#attrsModal .modal-card{ width:min(500px,92vw); } /* slightly narrower */
+#attrsModal .form-row{ grid-template-columns:36px 1fr 110px; } /* checkbox | name | visible */
+#attrsModal .form-row .attr-check{ display:flex; justify-content:center; align-items:center; }
+#attrsModal .attrs-controls{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:10px; }
+#attrsModal .attrs-controls .left{ display:flex; gap:8px; flex-wrap:wrap; }
+#attrsModal .attrs-controls .right{ display:flex; gap:8px; }
+#attrsModal .modal-foot{ display:none; } /* hide default footer for this modal */
+
+
+/* ===== Base modal compact ===== */
+#baseModal .modal-card{ width:min(230px,92vw); }
+#baseModal .modal-body{ font-size:14px; }
+#baseModal .form-row{ grid-template-columns:1fr; }
+
+
+/* Half-width base modal tweaks */
+#baseModal .form-row label{ margin-bottom:4px; }
+
+
+/* ===== Input font scaling (table cells & forms) ===== */
+td input, th input, .input{ font-size: var(--input-font); line-height: 1.4; }
+.input, .select{ height: 40px; } /* prevent clipping at larger font sizes */
+
+
+/* ===== Attrs modal: extra spacing under the first help line ===== */
+#attrsModal .modal-body > .help:first-of-type{ margin-bottom:12px; }
+
+</style>
+<style id="cleanup-tablewrap">html[data-theme="dark"] .table-wrap{background:#0b1220}</style>
+
+<style id="theme-toggle-style">
+.theme-toggle{margin-left:.5rem; padding:.4rem .6rem; border:1px solid var(--border,#d0d7de); border-radius:8px; background:transparent; cursor:pointer}
+html[data-theme="dark"] .theme-toggle{border-color:#2d3a4b}
+</style>
+
+<style>
+/* H-4 spacing adjustments */
+.toolbar-actions{ gap:8px !important; }
+#themeToggleActions{ padding:6px 8px; min-width:32px; justify-content:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-wrap">
+    <div class="toolbar">
+      <!-- H-1: Title (top-left) -->
+      <div class="toolbar-title"><h1>검은사막 선원관리 V3.0 (by.검은사막 라밤길드 ChaKanE)</h1></div>
+      <!-- H-3: Summary on top-right -->
+      <div class="toolbar-summary">
+        <div id="summary" class="header-summary"></div>
+      </div>
+
+      <!-- H-2: Preset bar on bottom-left -->
+      <div class="toolbar-preset">
+        <div class="preset-group" id="presetBar" title="프리셋 선택">
+          <div class="preset-swatches" id="presetSwatches" aria-label="프리셋 빠른 선택"></div>
+          <select id="presetSelect" title="프리셋 선택"></select>
+          <button class="btn secondary" id="presetAddBtn">추가</button>
+          <button class="btn secondary" id="presetRenameBtn">이름변경</button>
+          <button class="btn secondary" id="presetDeleteBtn">삭제</button>
+          <button class="btn" id="presetToggleBtn">프리셋 off</button>
+        </div>
+      </div>
+
+      <!-- H-4: Right-side buttons (bottom-right) -->
+      <div class="toolbar-actions">
+        <button class="btn save" id="calcBtn">상태보기</button>
+        <button class="btn" id="addSectionBtn">+ 선원종류추가</button>
+
+        <button class="btn load" id="loadBtn">불러오기</button>
+        <input id="loadFile" type="file" accept=".json" style="display:none">
+        <button class="btn save" id="saveBtn">저장하기</button>
+        
+
+        <button class="btn ghost" id="clearLocalBtn">완전초기화</button>
+        <button class="btn theme-toggle" id="themeToggleActions" title="모드 전환" aria-label="모드 전환">◑</button>
+		<button class="top-btn" onclick="openReadme()" title="README 보기">📖</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="notice" id="migrateNote">ⓘ "자동 저장: 값을 수정한 후 약 3초 뒤 저장됩니다. 다시 열면 자동으로 복원됩니다. // 저장 기능을 이용하여 데이터를 수시로 저장해 놓으세요."</div>
+</div>
+
+<div class="container" id="app"></div>
+
+<footer class="container">
+  ⓘ "오프라인 사용을 위한 데이터는 브라우저(localStorage)에 저장됩니다. // 로컬 스토리지 삭제 방법은 검색을 통해 확인해 주시기 바랍니다."
+  <div class="small" style="margin-top:6px">
+    ⚓ 제작자: 검은사막 라밤길드 ChaKanE
+  </div>
+</footer>
+
+<!-- 능력설정 모달 -->
+<div id="attrsModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="attrsTitle">
+  <div class="modal-backdrop" data-close="attrs"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="attrsTitle">능력 설정</div>
+      <button class="modal-close" data-close="attrs">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="help">속성명은 텍스트로 수정, 표시여부는 선택 바를 이용하여 설정합니다.</div>
+      <div id="attrsForm"></div>
+      <div class="help" style="margin-top:8px">항목 추가/삭제 시 표의 열이 자동 정렬됩니다.<br>삭제할 항목은 체크박스로 선택하세요.</div><div class="attrs-controls">  <div class="left">    <button id="attrAddBtn" class="small-btn">속성 추가</button>    <button id="attrDelBtn" class="small-btn danger">선택 삭제</button>  </div>  <div class="right">    <button class="btn" id="attrsSaveBtn">저장</button>    <button class="btn secondary" data-close="attrs">취소</button>  </div></div></div></div></div><!-- 베이스설정 모달 (1~20) -->
+<div id="baseModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="baseTitle">
+  <div class="modal-backdrop" data-close="base"></div>
+  <div class="modal-card">
+    <div class="modal-head">
+      <div id="baseTitle">베이스 설정<br>(레벨 범위 1~20)</br></div>
+      <button class="modal-close" data-close="base">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>시작 레벨</label>
+        <select id="baseStart" class="select"></select>
+      </div>
+      <div class="form-row">
+        <label>끝 레벨</label>
+        <select id="baseEnd" class="select"></select>
+      </div>
+      <div class="help">레벨을 지정해 주세요.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" data-close="base">취소</button>
+      <button class="btn" id="baseSaveBtn">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Constants ---------- */
+const DEFAULT_LEVELS=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+const DEFAULT_ATTRS=["끈기(속도)","눈치(가속)","감각(회전)","완력(제동)","박력(사거리)","집중(정확도)","시야(각도)"];
+const LS_KEY="sailorapp_state_v10";
+const THEME_KEY="sailorapp_theme";
+const PRESET_MAX=10, PRESET_MIN=1, NAME_MAX=6;
+
+const PRESET_COLORS=["#3b82f6","#a855f7","#f59e0b","#10b981","#ef4444","#06b6d4","#8b5cf6","#f97316","#22c55e","#e11d48"];
+const presetColor=(i)=>PRESET_COLORS[i % PRESET_COLORS.length];
+
+/* H-3: 요약에 표시할 섹션 키워드(이 순서대로 표기) */
+const SUMMARY_KEYS=["순수","자신","현실","부선장"];
+
+/* moved CABIN_BASE to top */
+const CABIN_BASE = {
+    "터프": 5,
+    "경험": 10,
+    "똑똑": 5,
+    "보물": 5,
+    "끈기": 5,
+    "자신": 5,
+    "계산": 10,
+    "사랑": 10,
+    "순수": 10,
+    "욕심": 10,
+    "바다": 10,
+    "성실": 10,
+    "우직": 7,
+    "힘": 8,
+    "강인": 8,
+    "만선": 13,
+    "호기심": 10,
+    "재빠른": 10,
+    "현실": 10,
+	"부선장": 0,
+  };
+/* ---------- Utils ---------- */
+function deepClone(x){return JSON.parse(JSON.stringify(x))}
+function numOrNull(v){if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null}
+function escapeHtml(s){return String(s??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;')}
+function clampName(s){const arr=[...String(s||'')];return (arr.length>NAME_MAX?arr.slice(0,NAME_MAX).join(''):s)||''}
+function makeBase(levels=DEFAULT_LEVELS,attrs=DEFAULT_ATTRS){return{levels:deepClone(levels),attrs:deepClone(attrs),enabledAttrs:Array(attrs.length).fill(true),values:Array.from({length:levels.length},()=>Array(attrs.length).fill(''))}}
+function makeInput(){return{sailors:[]}}
+function makeSection(name){return{name,sort:null,base:makeBase(),input:makeInput()}}
+function loadFromLocal(){try{const s=localStorage.getItem(LS_KEY);return s?JSON.parse(s):null}catch(e){return null}}
+function hexToRgb(hex){hex=hex.replace('#',''); if(hex.length===3) hex=[hex[0],hex[0],hex[1],hex[1],hex[2],hex[2]].join(''); const n=parseInt(hex,16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
+function softFrom(hex,alpha=.15){const {r,g,b}=hexToRgb(hex); return `rgba(${r},${g},${b},${alpha})`;}
+
+/* ---------- State ---------- */
+let state=loadFromLocal()??{
+  sections:[makeSection("순수"),makeSection("자신"),makeSection("현실")],
+  presetMode:false,
+  presets:["프리셋 1"],
+  activePreset:0
+};
+let calcCache=null,saveTimer=null;
+let currentSectionForAttrs=null;
+let currentSectionForBase=null;
+
+/* ---------- Normalize ---------- */
+function normalizeState(){
+  let migrated=false;
+  if(!state || !Array.isArray(state.sections)){ state={sections:[makeSection('순수')], presetMode:false, presets:["프리셋 1"], activePreset:0}; migrated=true; }
+  if(!Array.isArray(state.presets) || state.presets.length<PRESET_MIN){ state.presets=["프리셋 1"]; state.activePreset=0; migrated=true; }
+  if(typeof state.activePreset!=="number"||state.activePreset<0||state.activePreset>=state.presets.length){ state.activePreset=0; migrated=true; }
+  state.presets=state.presets.map(clampName).slice(0,PRESET_MAX);
+
+  state.sections.forEach(sec=>{
+    if(!sec.base) { sec.base=makeBase(); migrated=true; }
+    if(!Array.isArray(sec.base.enabledAttrs) || sec.base.enabledAttrs.length!==sec.base.attrs.length){ sec.base.enabledAttrs=Array(sec.base.attrs.length).fill(true); migrated=true; }
+    if(!sec.input) { sec.input=makeInput(); migrated=true; }
+    if(!Array.isArray(sec.input.sailors)) { sec.input.sailors=[]; migrated=true; }
+    if(!sec.sort || (typeof sec.sort!=='object')) sec.sort=null;
+    sec.input.sailors.forEach(r=>{
+      if(!Array.isArray(r.stats)) r.stats=[];
+      while(r.stats.length<sec.base.attrs.length) r.stats.push('');
+      if(!Array.isArray(r.onboard)) r.onboard=[];
+      if(r.onboard.length!==state.presets.length){ r.onboard = Array.from({length:state.presets.length}, (_,i)=> !!r.onboard[i]); }
+      if(typeof r.checked!=="boolean") r.checked=false;
+    });
+  });
+
+  if(migrated){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){} }
+}
+function scheduleSave(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch(e){console.warn(e)}},3000)}
+function setByPath(obj,path,val){let cur=obj;for(let i=0;i<path.length-1;i++)cur=cur[path[i]];cur[path[path.length-1]]=val}
+function visibleAttrIndexes(sec){const idxs=[];for(let i=0;i<sec.base.attrs.length;i++)if(sec.base.enabledAttrs?.[i])idxs.push(i);return idxs}
+
+/* ---------- 섹션 이벤트 위임 ---------- */
+function bindSectionEvents(sectionEl, sidx){
+  sectionEl.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button,[data-act]');
+    if(!btn || !sectionEl.contains(btn)) return;
+    const act = btn.dataset.act;
+    let ridx = btn.dataset.r;
+    if(ridx === undefined){
+      const tr = btn.closest('tr[data-rowidx]');
+      if(tr) ridx = tr.getAttribute('data-rowidx');
+    }
+    ridx = (ridx!==undefined && ridx!==null) ? Number(ridx) : undefined;
+
+    switch(act){
+      case 'addRow': addRow(sidx); break;
+      case 'attrs': openAttrsDialog(sidx); break;
+      case 'basecfg': openBaseDialog(sidx); break;
+      case 'rename': renameSection(sidx); break;
+      case 'removeSection': removeSection(sidx); break;
+      case 'clearMarks': clearMarks(); break;
+      case 'delRow': if(ridx!==undefined) delRow(sidx, ridx); break;
+      case 'toggleMark': if(ridx!==undefined) toggleMark(sidx, ridx); break;
+      case 'toggleOnboard': if(ridx!==undefined) toggleOnboard(sidx, ridx); break;
+      default: return;
+    }
+    scheduleSave();
+    render();
+    if(calcCache) applyColors(calcCache);
+  }, {passive:true});
+}
+
+/* ---------- Rendering ---------- */
+function sortIndicator(sec,key){
+  if(!sec.sort || sec.sort.key===undefined) return '';
+  const isMatch = sec.sort.key===key; if(!isMatch) return '';
+  return `<span class="sort-ind">${sec.sort.asc?'▲':'▼'}</span>`;
+}
+
+function getSectionCountByName(name){
+  const target = state.sections.find(s=>String(s.name||'').trim()===name);
+  if(!target) return 0;
+  return target.input.sailors.filter(s=>s.name && s.name.trim()).length;
+}
+
+function render(){
+  const app=document.getElementById('app'); app.innerHTML='';
+
+  state.sections.forEach((sec,sidx)=>{
+    const secTotal = sec.input.sailors.filter(s=>s.name && s.name.trim()).length;
+    const onboardCount = sec.input.sailors.filter(s=>s.onboard?.[state.activePreset]).length;
+    const cabinPer = CABIN_BASE[String(sec.name || '').trim()] ?? 0;
+    const sectionCabins = cabinPer * onboardCount;
+
+    const wrap=document.createElement('section'); wrap.className='section';
+    wrap.innerHTML = `
+      <div class="section-header">
+        <div class="section-title"><span>📁</span><span>${escapeHtml(sec.name)}</span>
+          <span class="sec-count small" title="이 섹션의 선원 수">선원 수 ${secTotal} / ${escapeHtml(state.presets[state.activePreset] || '프리셋')} ${onboardCount} - 선실 ${sectionCabins}</span>
+        </div>
+        <div class="controls">
+          <button class="btn secondary" data-act="addRow" data-s="${sidx}">선원 추가</button>
+          <button class="btn secondary" data-act="attrs" data-s="${sidx}">⚙️ 능력 설정</button>
+          <button class="btn secondary" data-act="basecfg" data-s="${sidx}">⚙️ 베이스 설정</button>
+          <button class="btn secondary" data-act="rename" data-s="${sidx}">이름 변경</button>
+          ${state.sections.length>1?`<button class="btn secondary" data-act="removeSection" data-s="${sidx}">삭제</button>`:''}
+          <button class="btn" data-act="clearMarks" data-s="${sidx}">확인 해제</button>
+        </div>
+      </div>
+      <div class="section-grid">
+        <div class="panel">
+          <h3>선원 입력</h3>
+          <div class="table-wrap">${renderInputTable(sec,sidx)}</div>
+        </div>
+        <div class="panel">
+          <h3>선원 최고능력치</h3>
+          <div class="table-wrap">${renderBaseTable(sec,sidx)}</div>
+        </div>
+      </div>`;
+    app.appendChild(wrap);
+    bindSectionEvents(wrap, sidx);
+  });
+
+  // 입력값 바인딩
+  document.querySelectorAll('input[data-bind]').forEach(inp=>{
+    const handler=(e)=>{ const path=e.target.dataset.bind.split('.'); setByPath(state, path, e.target.value); scheduleSave(); if(calcCache) applyColors(calcCache); };
+    inp.addEventListener('input', handler);
+  });
+
+  // 정렬
+  document.querySelectorAll('.section').forEach((secEl, sidx)=>{
+    const sec = state.sections[sidx];
+    secEl.querySelectorAll('th[data-sort]').forEach(th=>{
+      th.classList.add('sortable');
+      th.onclick = null;
+      th.addEventListener('click', ()=>{
+        const ds = th.dataset.sort;
+        let key;
+        if(ds==='name') key='name';
+        else if(ds==='level') key='level';
+        else if(ds.startsWith('stat')) key=Number(ds.slice(4));
+        else return;
+        if(sec.sort && sec.sort.key===key){ sec.sort.asc = !sec.sort.asc; }
+        else { sec.sort = { key, asc: true }; }
+        scheduleSave();
+        render();
+        if(calcCache) applyColors(calcCache);
+      }, {passive:true});
+    });
+  });
+
+  
+  // 선원별 선실 수 기본데이터 (섹션명 -> 선실 수)
+  
+// 요약 & 프리셋 UI (H-3)
+  const totalAll = state.sections.reduce((acc,sec)=> acc + sec.input.sailors.filter(s=>s.name && s.name.trim()).length, 0);
+  const perKeyCounts = SUMMARY_KEYS.map(k=>({key:k, count:getSectionCountByName(k)}));
+  
+  const active = state.presets[state.activePreset]||'프리셋';
+  
+  // 활성 프리셋의 선실 합산 수 계산
+  const presetCabins = state.sections.reduce((acc, sec) => {
+    const secName = String(sec.name || '').trim();
+    const perSailor = CABIN_BASE[secName] ?? 0;
+    const onboardCount = sec.input.sailors.filter(s => s.onboard?.[state.activePreset]).length;
+    return acc + (perSailor * onboardCount);
+  }, 0);
+const onboardTotal = state.sections.reduce((acc,sec)=> acc + sec.input.sailors.filter(s=>s.onboard?.[state.activePreset]).length, 0);
+  const sumEl = document.getElementById('summary');
+  if (sumEl){
+    const keyText = perKeyCounts.map(o=>`${escapeHtml(o.key)} ${o.count}`).join(' / ');
+    sumEl.innerHTML = `전체 보유 선원 ${totalAll} / ${keyText} / ${escapeHtml(active)} 선실 ${presetCabins}`;
+}
+
+  syncPresetBar();
+  renderSwatches();
+  injectPresetRowStyles();
+  if(calcCache) applyColors(calcCache);
+}
+
+function rowValueForSort(row,key){
+  if(key==='name') return String(row.name ?? '');
+  if(key==='level') return Number(row.level ?? NaN);
+  if(typeof key==='number') return Number(row.stats?.[key] ?? NaN);
+  return '';
+}
+function sortedRows(sec){
+  let rows = sec.input.sailors.map((r,i)=>({...r,_i:i}));
+  const s = sec.sort;
+  if(!s || s.key===undefined) return rows;
+
+  rows.sort((a,b)=>{
+    if(state.presetMode){
+      const pa = !!(a.onboard?.[state.activePreset]);
+      const pb = !!(b.onboard?.[state.activePreset]);
+      if(pa!==pb) return (pb?1:0)-(pa?1:0);
+    }
+    const av=rowValueForSort(a,s.key), bv=rowValueForSort(b,s.key);
+    let cmp;
+    if(typeof av==='number' && typeof bv==='number' && !Number.isNaN(av) && !Number.isNaN(bv)){ cmp = av - bv; }
+    else{ cmp = String(av).localeCompare(String(bv), 'ko', {numeric:true}); }
+    return s.asc ? cmp : -cmp;
+  });
+  return rows;
+}
+
+function renderInputTable(sec,sidx){
+  const vis=visibleAttrIndexes(sec);
+  const indName = sortIndicator(sec,'name');
+  const indLevel = sortIndicator(sec,'level');
+  let html='<table><thead><tr>';
+  html+=`<th data-sort="name">선원${indName}</th>`;
+  html+=`<th data-sort="level">레벨${indLevel}</th>`;
+  html+=`<th class="onboard-col">탑승</th>`;
+  vis.forEach(i=>{ const ind = sortIndicator(sec,i); html+=`<th data-sort="stat${i}">${escapeHtml(sec.base.attrs[i])}${ind}</th>`; });
+  html+='<th>작업</th></tr></thead><tbody>';
+
+  if(sec.input.sailors.length===0)
+    sec.input.sailors.push({name:'',level:'',stats:Array(sec.base.attrs.length).fill(''),checked:false,onboard:Array(state.presets.length).fill(false)});
+
+  const rows=sortedRows(sec);
+  rows.forEach(rowObj=>{
+    const ridx=rowObj._i;
+    const row=sec.input.sailors[ridx];
+    const inActive = !!row.onboard?.[state.activePreset];
+    const rowCls = (row.checked?'row-mark ':'') + (inActive?`row-onboard preset-${state.activePreset}`:'');
+    const btnTxt = row.checked ? '확인 해제' : '확인';
+
+    html+=`<tr data-rowidx="${ridx}" class="${rowCls}">`;
+    html+=`<td class="name-col">` + (row.checked?`<div class="mark-dot" title="확인됨"></div>`:'') + `<input class="input" data-bind="sections.${sidx}.input.sailors.${ridx}.name" value="${escapeHtml(row.name)}" placeholder="이름"/></td>`;
+    const lastLevel = sec.base.levels[sec.base.levels.length-1];
+    html+=`<td class="level-col"><input class="input" data-bind="sections.${sidx}.input.sailors.${ridx}.level" value="${escapeHtml(row.level)}" placeholder="${sec.base.levels[0]}~${lastLevel}"/></td>`;
+    const color=presetColor(state.activePreset);
+    const starStyle = inActive
+      ? `background:${color};color:#fff;border:1px solid ${color}`
+      : `background:#fff;color:${color};border:1px solid ${color}`;
+    html+=`<td><button class="btn star" style="${starStyle}" data-act="toggleOnboard" data-s="${sidx}" data-r="${ridx}">${inActive?'★':'☆'}</button></td>`;
+    vis.forEach(i=>{const v=row.stats?.[i]??''; html+=`<td><input class="input" data-bind="sections.${sidx}.input.sailors.${ridx}.stats.${i}" value="${escapeHtml(v)}"/></td>`;});
+    html+=`<td class="actions-col"><button class="btn secondary" data-act="delRow" data-s="${sidx}" data-r="${ridx}">삭제</button> <button class="btn" data-act="toggleMark" data-s="${sidx}" data-r="${ridx}">${btnTxt}</button></td>`;
+    html+=`</tr>`;
+  });
+  html+='</tbody></table>';
+  return html;
+}
+
+function renderBaseTable(sec,sidx){
+  const vis=visibleAttrIndexes(sec);
+  let html='<table><thead><tr><th>레벨</th>';
+  vis.forEach(i=> html+=`<th>${escapeHtml(sec.base.attrs[i])}</th>`);
+  html+='</tr></thead><tbody>';
+  sec.base.levels.forEach((lvl,r)=>{
+    if(!Array.isArray(sec.base.values[r])) sec.base.values[r]=Array(sec.base.attrs.length).fill('');
+    while(sec.base.values[r].length<sec.base.attrs.length) sec.base.values[r].push('');
+    html+=`<tr><td>${lvl}</td>`;
+    vis.forEach(i=>{
+      const v=sec.base.values[r][i]??'';
+      html+=`<td><input class="input" data-bind="sections.${sidx}.base.values.${r}.${i}" value="${escapeHtml(v)}"/></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table>';
+  return html;
+}
+
+/* ---------- Row Ops ---------- */
+function addRow(s){
+  const sec=state.sections[s]; const cols=sec.base.attrs.length;
+  sec.input.sailors.push({name:'',level:'',stats:Array(cols).fill(''),checked:false,onboard:Array(state.presets.length).fill(false)});
+}
+function delRow(s,r){
+  const sec=state.sections[s]; sec.input.sailors.splice(r,1);
+  if(sec.input.sailors.length===0) addRow(s);
+}
+function toggleMark(s,r){
+  const sec=state.sections[s]; const row=sec.input.sailors[r]; row.checked = !row.checked;
+}
+function toggleOnboard(s,r){
+  const sec=state.sections[s]; const row=sec.input.sailors[r];
+  if(!Array.isArray(row.onboard)) row.onboard=Array(state.presets.length).fill(false);
+  row.onboard[state.activePreset]=!row.onboard[state.activePreset];
+}
+function clearMarks(){ state.sections.forEach(sec=>sec.input.sailors.forEach(r=>r.checked=false)); }
+function renameSection(s){
+  const cur=state.sections[s].name; const nm=prompt('구간 이름을 입력하세요',cur);
+  if(nm&&nm.trim()) state.sections[s].name=nm.trim();
+}
+function removeSection(s){
+  if(!confirm('이 구간을 삭제하시겠습니까?')) return;
+  state.sections.splice(s,1);
+  if(state.sections.length===0) state.sections.push(makeSection('새 구간'));
+}
+
+/* ---------- Preset UI ---------- */
+function syncPresetBar(){
+  const sel = document.getElementById('presetSelect');
+  if (sel){
+    sel.innerHTML = state.presets
+      .map((n,i)=>`<option value="${i}" ${i===state.activePreset?'selected':''}>${escapeHtml(n)}</option>`)
+      .join('');
+  }
+  const hex = presetColor(state.activePreset);
+  document.documentElement.style.setProperty('--preset-accent', hex);
+  document.documentElement.style.setProperty('--preset-soft', softFrom(hex,.18));
+  if (sel) sel.style.borderColor = softFrom(hex,.35);
+
+  const presetBtn = document.getElementById('presetToggleBtn');
+  if (presetBtn) presetBtn.textContent = '프리셋 ' + (state.presetMode ? 'on' : 'off');
+}
+function renderSwatches(){
+  const wrap=document.getElementById('presetSwatches');
+  if(!wrap) return;
+  wrap.innerHTML = state.presets.map((n,i)=>{
+    const color=presetColor(i);
+    const selected = i===state.activePreset;
+    return `<button class="swatch" style="background:${color}" title="${escapeHtml(n)}" aria-selected="${selected}" data-preset-index="${i}"></button>`;
+  }).join('');
+  wrap.querySelectorAll('.swatch').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const i=Number(btn.getAttribute('data-preset-index'))||0;
+      state.activePreset=i; scheduleSave(); render();
+    });
+  });
+}
+function addPreset(){
+  if(state.presets.length>=PRESET_MAX){ alert('최대 10개까지 가능합니다.'); return; }
+  state.presets.push(`프리셋 ${state.presets.length+1}`);
+  state.sections.forEach(sec=>sec.input.sailors.forEach(r=>{ if(!Array.isArray(r.onboard)) r.onboard=[]; r.onboard.push(false); }));
+  state.activePreset=state.presets.length-1;
+  scheduleSave(); render();
+}
+function renamePreset(){
+  const cur=state.presets[state.activePreset]||'';
+  const nm=prompt('프리셋 이름(최대 6자)', cur);
+  if(nm===null) return;
+  state.presets[state.activePreset]=clampName(nm.trim());
+  scheduleSave(); render();
+}
+function deletePreset(){
+  if(state.presets.length<=PRESET_MIN){ alert('프리셋은 최소 1개가 필요합니다.'); return; }
+  if(!confirm('현재 프리셋을 삭제할까요? 해당 프리셋의 탑승 지정도 함께 제거됩니다.')) return;
+  const idx=state.activePreset;
+  state.presets.splice(idx,1);
+  state.sections.forEach(sec=>sec.input.sailors.forEach(r=>{ if(Array.isArray(r.onboard)) r.onboard.splice(idx,1); }));
+  state.activePreset = Math.max(0, Math.min(state.activePreset, state.presets.length-1));
+  scheduleSave(); render();
+}
+
+/* ---------- Theme ---------- */
+function applyTheme(theme){
+  const html=document.documentElement;
+  if(theme!=='dark'){ theme='light'; }
+  html.setAttribute('data-theme', theme);
+  try{ localStorage.setItem(THEME_KEY, theme); }catch(e){}
+}
+
+/* ---------- Modal ---------- */
+function toggleModal(which, show){
+  const el = document.getElementById(
+    which==='attrs'? 'attrsModal' : 'baseModal'
+  );
+  if(!el) return;
+  if(show){ el.classList.add('show'); }
+  else{ el.classList.remove('show'); }
+}
+
+/* ---------- Mount ---------- */
+document.addEventListener('DOMContentLoaded', ()=>{
+  // 프리셋/메뉴 바인딩 + 초기화
+  const addBtn=document.getElementById('presetAddBtn');
+  const renBtn=document.getElementById('presetRenameBtn');
+  const delBtn=document.getElementById('presetDeleteBtn');
+  const togBtn=document.getElementById('presetToggleBtn');
+  const sel=document.getElementById('presetSelect');
+
+  if(addBtn) addBtn.addEventListener('click', addPreset);
+  if(renBtn) renBtn.addEventListener('click', renamePreset);
+  if(delBtn) delBtn.addEventListener('click', deletePreset);
+  if(togBtn) togBtn.addEventListener('click', ()=>{ state.presetMode=!state.presetMode; scheduleSave(); render(); });
+  if(sel) sel.addEventListener('change', (e)=>{ const v=Number(e.target.value)||0; state.activePreset=v; scheduleSave(); render(); });
+
+  normalizeState();
+
+  const savedTheme = (localStorage.getItem(THEME_KEY)||'light');
+  applyTheme(savedTheme);
+
+  document.getElementById('loadBtn').addEventListener('click', ()=> document.getElementById('loadFile').click());
+  document.getElementById('saveBtn').addEventListener('click',()=>{
+    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=`검은사막 선원관리_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
+    a.click(); URL.revokeObjectURL(a.href);
+  });
+  document.getElementById('loadFile').addEventListener('change',(e)=>{
+    const f=e.target.files?.[0]; if(!f) return; const reader=new FileReader();
+    reader.onload=()=>{try{
+      const obj=JSON.parse(String(reader.result));
+      if(!obj.sections) throw new Error('sections 누락');
+      state=obj; calcCache=null; normalizeState(); render(); scheduleSave();
+    }catch(err){alert('불러오기 실패: '+err.message);} };
+    reader.readAsText(f,'utf-8'); e.target.value='';
+  });
+
+  document.getElementById('calcBtn').addEventListener('click',()=>{ calcCache=compute(); applyColors(calcCache); });
+  document.getElementById('addSectionBtn').addEventListener('click',()=>{
+    const nm=prompt('새 구간 이름을 입력하세요','새 구간'); if(!nm||!nm.trim()) return;
+    const levels = Array.from({length:20},(_,i)=>i+1);
+    const attrs=DEFAULT_ATTRS.slice();
+    state.sections.push({name:nm.trim(),sort:null,base:makeBase(levels,attrs),input:makeInput()});
+    render(); scheduleSave();
+  });
+
+  document.getElementById('clearLocalBtn').addEventListener('click',()=>{
+    if(!confirm('로컬 저장 데이터를 초기화할까요?')) return;
+    localStorage.removeItem(LS_KEY);
+    alert('초기화 완료. 새로고침하세요.');
+  });
+
+  // 모달 닫기 버튼 이벤트
+  document.querySelectorAll('[data-close=\"attrs\"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('attrs', false)));
+  document.querySelectorAll('[data-close=\"base\"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('base', false)));
+
+  injectPresetRowStyles();
+  render();
+});
+
+/* ---------- Colors compute ---------- */
+function compute(){
+  const out=[];
+  state.sections.forEach(sec=>{
+    const levelToRow=new Map(); sec.base.levels.forEach((lvl,r)=>levelToRow.set(Number(lvl),r));
+    const resSec=[]; const rowAllPlus=[]; const vis=visibleAttrIndexes(sec);
+    sec.input.sailors.forEach((sailor,r)=>{
+      const lv=numOrNull(sailor.level); const baseRowIdx=(lv!=null)?levelToRow.get(lv):undefined;
+      let allPlus=vis.length>0; const perCell=[];
+      vis.forEach(cIdx=>{
+        const val=numOrNull(sailor.stats?.[cIdx]); const baseVal=(baseRowIdx!==undefined)?numOrNull(sec.base.values[baseRowIdx]?.[cIdx]):null;
+        let color=null, deltaTxt='';
+        if(val!=null&&baseVal!=null){
+          const diff=Math.round((val-baseVal)*10)/10;
+          if(diff>0){color='cyan';deltaTxt=`(+${diff})`;}
+          else if(diff<0){color='pink';deltaTxt=`(${diff})`;allPlus=false;}
+          else {color='green';deltaTxt='';allPlus=false;}
+        } else {allPlus=false;}
+        perCell.push({color,deltaTxt});
+      });
+      rowAllPlus.push(allPlus); resSec.push(perCell);
+    });
+    out.push({cells:resSec,rowAllPlus,vis});
+  });
+  return out;
+}
+function applyColors(calc){
+  const app=document.getElementById('app'); const sectionEls=[...app.getElementsByClassName('section')];
+  sectionEls.forEach((secEl,sidx)=>{
+    const tables=secEl.getElementsByTagName('table'); const inputTable=tables[0]; if(!inputTable) return;
+    const tbody=inputTable.tBodies[0]; const rows=[...tbody.rows];
+    rows.forEach((tr)=>{
+      const origIdx = Number(tr.getAttribute('data-rowidx'));
+      if(Number.isNaN(origIdx)) return;
+      const secCalc = calc[sidx];
+      const levelCell=tr.cells[1];
+      if(secCalc.rowAllPlus[origIdx]) levelCell.classList.add('level-yellow'); else levelCell.classList.remove('level-yellow');
+      const vis=secCalc.vis||[];
+      for(let i=0;i<vis.length;i++){
+        const td=tr.cells[3+i]; if(!td) continue;
+        td.classList.remove('cell-cyan','cell-pink','cell-green');
+        const badge=td.querySelector('.badge'); if(badge) badge.remove();
+        const cellRes=secCalc.cells[origIdx]?.[i];
+        if(cellRes){
+          if(cellRes.color==='cyan') td.classList.add('cell-cyan');
+          else if(cellRes.color==='pink') td.classList.add('cell-pink');
+          else if(cellRes.color==='green') td.classList.add('cell-green');
+          if(cellRes.deltaTxt){const b=document.createElement('div'); b.className='badge'; b.textContent=cellRes.deltaTxt; td.appendChild(b);}        
+        }
+      }
+    });
+  });
+}
+/* ---------- Row highlight per preset ---------- */
+function injectPresetRowStyles(){
+  let el = document.getElementById('presetRowStyles');
+  if(!el){ el = document.createElement('style'); el.id='presetRowStyles'; document.head.appendChild(el); }
+  const rules = PRESET_COLORS.map((hex,idx)=>`.row-onboard.preset-${idx} td{ box-shadow: inset 0 0 0 9999px ${softFrom(hex,.12)} !important; }`).join('\n');
+  el.textContent = rules;
+}
+
+/* ---------- Attrs/Base Dialogs ---------- */
+
+
+function openAttrsDialog(sidx){
+  currentSectionForAttrs=sidx;
+  const sec = state.sections[sidx];
+  const form = document.getElementById('attrsForm');
+  form.innerHTML = '';
+
+  // Build rows: [checkbox] [name input] [visible select]
+  sec.base.attrs.forEach((name, i) => {
+    const row = document.createElement('div');
+    row.className = 'form-row';
+    row.innerHTML = [
+      '<div class="attr-check"><input type="checkbox" class="attr-select" data-attr-select-index="'+i+'"/></div>',
+      '<input class="input" data-attr-name-index="'+i+'" value="'+escapeHtml(name)+'" />',
+      '<select class="select" data-attr-enabled-index="'+i+'">',
+      '  <option value="true" '+(sec.base.enabledAttrs[i]?'selected':'')+'>표시</option>',
+      '  <option value="false" '+(!sec.base.enabledAttrs[i]?'selected':'')+'>숨김</option>',
+      '</select>'
+    ].join('');
+    form.appendChild(row);
+  });
+
+  // Buttons
+  document.getElementById('attrAddBtn').onclick = () => {
+    sec.base.attrs.push('새 속성');
+    sec.base.enabledAttrs.push(true);
+    state.sections[sidx].input.sailors.forEach(r=> r.stats.push(''));
+    scheduleSave();
+    openAttrsDialog(sidx);
+  };
+  document.getElementById('attrDelBtn').onclick = () => {
+    const checks = [...document.querySelectorAll('#attrsModal .attr-select:checked')];
+    if(checks.length===0){ alert('삭제할 속성을 선택하세요.'); return; }
+    const idxs = checks.map(el=> Number(el.getAttribute('data-attr-select-index')) ).filter(Number.isInteger).sort((a,b)=>b-a);
+    idxs.forEach(idx=>{
+      if(idx>=0 && idx<sec.base.attrs.length){
+        sec.base.attrs.splice(idx,1);
+        sec.base.enabledAttrs.splice(idx,1);
+        state.sections[sidx].input.sailors.forEach(r=> r.stats.splice(idx,1));
+        sec.base.values.forEach(row=> row.splice(idx,1));
+      }
+    });
+    scheduleSave();
+    openAttrsDialog(sidx);
+  };
+  document.getElementById('attrsSaveBtn').onclick = () => {
+    const nameInputs = [...form.querySelectorAll('[data-attr-name-index]')];
+    const enabledSelects = [...form.querySelectorAll('[data-attr-enabled-index]')];
+    nameInputs.forEach(inp => {
+      const idx = Number(inp.getAttribute('data-attr-name-index'));
+      sec.base.attrs[idx] = inp.value.trim() || sec.base.attrs[idx];
+    });
+    enabledSelects.forEach(sel => {
+      const idx = Number(sel.getAttribute('data-attr-enabled-index'));
+      sec.base.enabledAttrs[idx] = sel.value === 'true';
+    });
+    scheduleSave();
+    toggleModal('attrs', false);
+    render();
+    if(calcCache) applyColors(calcCache);
+  };
+
+  toggleModal('attrs', true);
+}
+
+
+
+function openBaseDialog(sidx){
+  currentSectionForBase=sidx;
+  const sec = state.sections[sidx];
+  const startSel = document.getElementById('baseStart');
+  const endSel = document.getElementById('baseEnd');
+
+  // Populate selects 1~20
+  const opts = Array.from({length:20},(_,i)=>i+1).map(n=>`<option value="${n}">${n}</option>`).join('');
+  startSel.innerHTML = opts;
+  endSel.innerHTML = opts;
+
+  const curStart = sec.base.levels[0];
+  const curEnd = sec.base.levels[sec.base.levels.length-1];
+  startSel.value = curStart;
+  endSel.value = curEnd;
+
+  document.getElementById('baseSaveBtn').onclick = () => {
+    const s = Number(startSel.value);
+    const e = Number(endSel.value);
+    if(!(Number.isInteger(s)&&Number.isInteger(e)&&s>=1&&e<=20&&s<=e)){
+      alert('레벨 범위는 1~20, 시작 ≤ 끝 이어야 합니다.');
+      return;
+    }
+    const newLevels = Array.from({length:e-s+1},(_,i)=>s+i);
+    const oldLevels = sec.base.levels;
+    const map = new Map(oldLevels.map((lv,idx)=>[lv, idx]));
+    const newValues = newLevels.map(lv=>{
+      const oi = map.get(lv);
+      if(oi!=null) return deepClone(sec.base.values[oi]);
+      return Array(sec.base.attrs.length).fill('');
+    });
+    sec.base.levels = newLevels;
+    sec.base.values = newValues;
+    scheduleSave();
+    toggleModal('base', false);
+    render();
+  };
+
+  toggleModal('base', true);
+}
+</script>
+<script id="theme-toggle-script">
+(function(){
+  let saved = 'light';
+  try{ saved = localStorage.getItem(THEME_KEY) || 'light'; }catch(e){}
+  applyTheme(saved);
+  document.querySelectorAll('.theme-toggle').forEach(($btn)=>{
+    $btn.addEventListener('click', ()=>{
+      const next = (document.documentElement.getAttribute('data-theme') === 'dark') ? 'light' : 'dark';
+      applyTheme(next);
+    }, {passive:true});
+  });
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  async function openReadme() {
+    const modal = document.getElementById('readmeModal');
+    const body  = document.getElementById('readmeBody');
+    body.textContent = '불러오는 중…';
+    modal.style.display = 'block';
+
+    try {
+      const res = await fetch('https://pposonge.github.io/BDSM/README.md', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const md = await res.text();
+      body.innerHTML = marked.parse(md);
+    } catch (e) {
+      body.innerHTML = `
+        <p style="margin:0 0 8px;">앱 내 표시가 어려워 새 탭에서 여는 방식으로 전환합니다.</p>
+        <p><a href="https://pposonge.github.io/BDSM/README.md" target="_blank" rel="noopener noreferrer">README 새 탭으로 열기</a></p>`;
+      console.error(e);
+    }
+  }
+  function closeReadme() {
+    document.getElementById('readmeModal').style.display = 'none';
+  }
+</script>
+<!-- README Modal -->
+<div id="readmeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:9999;">
+  <div style="max-width:900px; width:90%; max-height:80vh; overflow:auto; margin:5vh auto; background:#fff; color:#111; border-radius:12px; padding:20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px;">
+      <strong>README</strong>
+      <button onclick="closeReadme()" style="padding:6px 10px;">닫기</button>
+    </div>
+    <div id="readmeBody">불러오는 중…</div>
+  </div>
+</div>
+</body>
+</html>
