@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>검은사막 선원관리 V3.0 — 기본 구성 및 이용법</title>
+  <style>
+    :root{
+      --fg:#111827; --muted:#4b5563; --bg:#ffffff; --card:#ffffff; --border:#e5e7eb; --accent:#2563eb;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{ --fg:#e5e7eb; --muted:#9ca3af; --bg:#0b0f16; --card:#0f141d; --border:#1f2735; --accent:#60a5fa; }
+    }
+    *{ box-sizing:border-box }
+    body{
+      margin:0; background:var(--bg); color:var(--fg);
+      font: 16px/1.7 ui-sans-serif,system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Segoe UI",Roboto,"Helvetica Neue",Arial;
+      -webkit-font-smoothing:antialiased;
+    }
+    .wrap{ max-width: 860px; margin: 32px auto; padding: 0 20px; }
+    h1{ font-size: clamp(26px, 3vw, 32px); margin: 0 0 6px; letter-spacing:.2px }
+    .subtitle{ margin: 0 0 20px; color: var(--muted) }
+    h2{ font-size: clamp(20px, 2.2vw, 24px); margin: 28px 0 10px; padding-top: 10px; border-top: 1px dashed var(--border) }
+    p{ margin: 8px 0 0 }
+    ul{ margin: 6px 0 0 20px }
+    li{ margin: 2px 0 }
+    code,kbd{ font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size: .95em; background: rgba(148,163,184,.15); padding: .1em .35em; border-radius: 6px }
+    .note{ font-size: .92em; color: var(--muted) }
+    .chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px }
+    .chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background: var(--card); border:1px solid var(--border); border-radius: 999px; }
+    .kbd{ border:1px solid var(--border); padding: 2px 6px; border-radius: 6px; background: var(--card) }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>검은사막 선원관리 V3.0</h1>
+    <p class="subtitle">기본 구성 및 이용법</p>
+
+    <section id="overview">
+      <h2>[1] 개요</h2>
+      <ul>
+        <li>이 도구는 선원 정보를 섹션(구간)별로 관리하며, 각 선원의 레벨별 ‘최고 능력치(베이스)’와 비교해 능력치 차이를 <strong>색상</strong>으로 표시합니다.</li>
+        <li>데이터는 브라우저의 <strong>로컬 저장소(LocalStorage)</strong>에 자동 저장됩니다. 값이 수정되면 약 3초 후 저장되며, 다시 실행 시 이전 상태가 복원됩니다.</li>
+        <li>JSON 파일로 <strong>내보내기/불러오기</strong>를 지원합니다.</li>
+      </ul>
+    </section>
+
+    <section id="layout">
+      <h2>[2] 화면 구성</h2>
+      <ul>
+        <li><strong>요약 배지</strong>: 전체 보유 선원 수, 주요 섹션(순수, 자신, 현실, 부선장)별 보유 수, 활성 프리셋의 총 선실 수를 표시</li>
+        <li><strong>프리셋 바</strong>: 색상 버튼, 프리셋 선택 드롭다운, <code>[추가]</code> <code>[이름 변경]</code> <code>[삭제]</code> <code>[프리셋 On/Off]</code></li>
+        <li><strong>우측 작업 버튼</strong>:
+          <ul>
+            <li><code>[상태 보기]</code> — 입력값을 베이스와 비교하여 색상/배지 표시 적용</li>
+            <li><code>[+ 선원 종류 추가]</code> — 새 섹션(구간) 추가</li>
+            <li><code>[불러오기]</code> — JSON 선택 후 상태 복원</li>
+            <li><code>[저장하기]</code> — 현재 상태를 JSON 다운로드</li>
+            <li><code>[완전 초기화]</code> — 저장 데이터 삭제(새로고침 필요)</li>
+            <li><code>[모드 전환(◑)]</code> — 라이트/다크 모드 전환</li>
+          </ul>
+        </li>
+      </ul>
+    </section>
+
+    <section id="presets">
+      <h2>[3] 프리셋 사용법</h2>
+      <ul>
+        <li>프리셋 최대 <strong>10개</strong>, 이름은 최대 <strong>6자</strong>.</li>
+        <li><strong>프리셋 On</strong> 상태에서 정렬 시 ‘탑승(★)’ 지정 선원이 우선 표시됩니다.</li>
+        <li>각 선원 행의 ★ 버튼으로 활성 프리셋 기준 <strong>탑승/미탑승</strong>을 토글합니다(★/☆).</li>
+      </ul>
+    </section>
+
+    <section id="sections">
+      <h2>[4] 섹션(구간) 관리</h2>
+      <p>섹션은 선원 그룹(예: 순수, 자신, 현실, 부선장 등)을 나타냅니다.</p>
+      <ul>
+        <li><code>[선원 추가]</code> — 입력 표에 행 추가</li>
+        <li><code>[⚙️ 능력 설정]</code> — 능력치 열 관리(이름/표시 여부/추가/삭제)</li>
+        <li><code>[⚙️ 베이스 설정]</code> — 레벨 범위(1~20) 재지정</li>
+        <li><code>[이름 변경]</code> — 섹션 이름 변경</li>
+        <li><code>[삭제]</code> — 섹션 제거(2개 이상일 때 표시)</li>
+        <li><code>[확인 해제]</code> — 이 섹션의 모든 행 ‘확인’ 표시 일괄 해제</li>
+      </ul>
+      <p class="note">섹션 요약: “선원 수 X / [활성 프리셋명] Y - 선실 Z(= 섹션 선실값 × 탑승 수)”.</p>
+    </section>
+
+    <section id="table">
+      <h2>[5] 표 사용법</h2>
+      <ul>
+        <li><strong>[선원 입력] 열</strong>: 이름 / 레벨(1~20) / 탑승(★/☆) / 능력치들 / 작업(삭제, 확인)</li>
+        <li>열 제목 클릭으로 정렬(이름, 레벨, 능력치). 프리셋 On이면 탑승 선원 우선 정렬.</li>
+        <li><code>[확인]</code> 클릭 시 해당 행 강조(토글). 상단 <code>[확인 해제]</code>로 일괄 해제.</li>
+        <li><strong>[선원 최고 능력치]</strong> 표에서 레벨별 기준값(베이스) 입력/수정.</li>
+      </ul>
+    </section>
+
+    <section id="settings">
+      <h2>[6] 능력/베이스 설정</h2>
+      <p><strong>능력 설정</strong></p>
+      <ul>
+        <li>항목명 텍스트 수정 및 표시/숨김 전환</li>
+        <li><code>[속성 추가]</code>로 열 추가, <code>[선택 삭제]</code>로 체크된 열 삭제(입력/베이스 표 모두에서 제거)</li>
+        <li><code>[저장]</code> / <code>[취소]</code> 제공</li>
+      </ul>
+      <p><strong>베이스 설정</strong></p>
+      <ul>
+        <li>시작/끝 레벨(1~20) 지정 → 지정 범위로 레벨 행 재구성</li>
+        <li>기존 범위에 있던 레벨의 값은 가능한 경우 유지</li>
+      </ul>
+    </section>
+
+    <section id="status">
+      <h2>[7] 상태 보기 (색상 비교 규칙)</h2>
+      <ul>
+        <li><span class="chip"><span>형광색</span> <span class="kbd">+Δ</span></span>: 입력값 &gt; 기준값</li>
+        <li><span class="chip"><span>초록색</span></span>: 입력값 = 기준값</li>
+        <li><span class="chip"><span>분홍색</span> <span class="kbd">Δ</span></span>: 입력값 &lt; 기준값</li>
+        <li>표시 중인 모든 능력치가 기준보다 높으면 해당 행의 <strong>레벨 셀에 노란색 강조</strong> 표시</li>
+      </ul>
+    </section>
+
+    <section id="cabin">
+      <h2>[8] 선실 계산 규칙 (섹션명 → 1인당 선실)</h2>
+      <p>아래 이름이 <strong>정확히 일치</strong>할 때만 선실이 계산됩니다(불일치 시 0).</p>
+      <p>터프 5 / 경험 10 / 똑똑 5 / 보물 5 / 끈기 5 / 자신 5 / 계산 10 /<br>
+         사랑 10 / 순수 10 / 욕심 10 / 바다 10 / 성실 10 / 우직 7 / 힘 8 /<br>
+         강인 8 / 만선 13 / 호기심 10 / 재빠른 10 / 현실 10 / 부선장 10</p>
+    </section>
+
+    <section id="data">
+      <h2>[9] 데이터 관리</h2>
+      <ul>
+        <li><code>[저장하기]</code>: 현재 상태를 JSON 파일로 다운로드</li>
+        <li><code>[불러오기]</code>: JSON 파일로 저장된 상태 복원(형식 오류 시 안내)</li>
+        <li><code>[완전 초기화]</code>: 로컬 저장소 데이터 삭제(이후 새로고침 필요)</li>
+      </ul>
+    </section>
+
+    <section id="mode">
+      <h2>[10] 모드 전환</h2>
+      <p><code>[◑]</code> 버튼으로 라이트/다크 모드 전환(브라우저에 기록되어 다음 방문 시 유지)</p>
+    </section>
+
+    <section id="credit">
+      <h2>제작자</h2>
+      <p>검은사막 라밤 길드 <strong>ChaKanE</strong></p>
+    </section>
+  </main>
+</body>
+</html>
