@@ -710,11 +710,48 @@ function render(){
     bindSectionEvents(wrap, sidx);
   });
 
-  // 입력값 바인딩
-  document.querySelectorAll('input[data-bind]').forEach(inp=>{
-    const handler=(e)=>{ const path=e.target.dataset.bind.split('.'); setByPath(state, path, e.target.value); scheduleSave(); if(calcCache) applyColors(calcCache); };
-    inp.addEventListener('input', handler);
-  });
+  // 입력값 바인딩 1렙 입력 시 베이스레벨 1레벨 자동 등록
+document.querySelectorAll('input[data-bind]').forEach(inp=>{
+  const handler = (e) => {
+    const path = e.target.dataset.bind.split('.');
+    const val  = e.target.value;
+
+    // 기존 상태 반영
+    setByPath(state, path, val);
+
+    // ▼ 레벨 입력칸일 때만 동작: sections.{sidx}.input.sailors.{ridx}.level
+    if (path[path.length - 1] === 'level') {
+      const sidx = Number(path[1]);   // 섹션 인덱스
+      const ridx = Number(path[4]);   // 행(선원) 인덱스
+      const sec  = state.sections[sidx];
+      const lv   = Number(val);
+
+      // 입력된 레벨이 베이스 표에 존재하면
+      const rowIdx = sec.base.levels.indexOf(lv);
+      if (rowIdx !== -1) {
+        const baseRow = sec.base.values[rowIdx] || [];
+        const stats   = sec.input.sailors[ridx].stats || [];
+
+        // "빈 칸만" 채우기 (사용자가 이미 넣은 값은 보존)
+        for (let i = 0; i < baseRow.length; i++) {
+          if (stats[i] === '' || stats[i] == null) {
+            stats[i] = baseRow[i];
+          }
+        }
+        sec.input.sailors[ridx].stats = stats;
+
+        // 화면에 바로 반영
+        render();
+        if (calcCache) applyColors(calcCache);
+      }
+    }
+
+    scheduleSave();
+    if (calcCache) applyColors(calcCache);
+  };
+  inp.addEventListener('input', handler);
+});
+
 
   // 정렬
   document.querySelectorAll('.section').forEach((secEl, sidx)=>{
