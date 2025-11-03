@@ -710,48 +710,52 @@ function render(){
     bindSectionEvents(wrap, sidx);
   });
 
-  // 입력값 바인딩 1렙 입력 시 베이스레벨 1레벨 자동 등록
+// 입력값 바인딩 (교체 버전)
 document.querySelectorAll('input[data-bind]').forEach(inp=>{
-  const handler = (e) => {
+  inp.addEventListener('input', (e)=>{
     const path = e.target.dataset.bind.split('.');
     const val  = e.target.value;
 
-    // 기존 상태 반영
+    // 1) 기존 로직: 입력값을 state에 반영
     setByPath(state, path, val);
 
-    // ▼ 레벨 입력칸일 때만 동작: sections.{sidx}.input.sailors.{ridx}.level
-    if (path[path.length - 1] === 'level') {
-      const sidx = Number(path[1]);   // 섹션 인덱스
-      const ridx = Number(path[4]);   // 행(선원) 인덱스
+    // 2) 오직 "sections.{s}.input.sailors.{r}.level" 이고 값이 정확히 1일 때만 실행
+    if (
+      path.length === 6 &&
+      path[0] === 'sections' &&
+      path[2] === 'input' &&
+      path[3] === 'sailors' &&
+      path[5] === 'level' &&
+      Number(val) === 1
+    ) {
+      const sidx = Number(path[1]);     // 섹션 인덱스
+      const ridx = Number(path[4]);     // 선원(행) 인덱스
       const sec  = state.sections[sidx];
-      const lv   = Number(val);
 
-      // 입력된 레벨이 베이스 표에 존재하면
-      const rowIdx = sec.base.levels.indexOf(lv);
-      if (rowIdx !== -1) {
-        const baseRow = sec.base.values[rowIdx] || [];
-        const stats   = sec.input.sailors[ridx].stats || [];
+      // 베이스 표에서 1레벨 행 찾기
+      const baseRowIdx = sec.base.levels.indexOf(1);
+      if (baseRowIdx !== -1) {
+        const baseRow = sec.base.values[baseRowIdx] ?? [];
+        const stats   = sec.input.sailors[ridx].stats ?? [];
 
-        // "빈 칸만" 채우기 (사용자가 이미 넣은 값은 보존)
+        // "빈 칸만" 채우기(기존 사용자 입력은 보존)
         for (let i = 0; i < baseRow.length; i++) {
           if (stats[i] === '' || stats[i] == null) {
             stats[i] = baseRow[i];
           }
         }
-        sec.input.sailors[ridx].stats = stats;
-
-        // 화면에 바로 반영
-        render();
-        if (calcCache) applyColors(calcCache);
       }
+
+      // 다른 칸들 값이 화면에 바로 반영되도록 재렌더 & 색상 갱신
+      render();
+      if (calcCache) applyColors(calcCache);
     }
 
+    // 저장 스케줄 & 색상 갱신(기존 동작 유지)
     scheduleSave();
     if (calcCache) applyColors(calcCache);
-  };
-  inp.addEventListener('input', handler);
+  });
 });
-
 
   // 정렬
   document.querySelectorAll('.section').forEach((secEl, sidx)=>{
