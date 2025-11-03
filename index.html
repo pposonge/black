@@ -746,10 +746,23 @@ document.querySelectorAll('input[data-bind]').forEach(inp=>{
         }
       }
 
-      // 다른 칸들 값이 화면에 바로 반영되도록 재렌더 & 색상 갱신
-      render();
-      if (calcCache) applyColors(calcCache);
-    }
+      // 다른 칸들 값이 화면에 바로 반영되도록 재렌더 & 색상 갱신 (patched: scroll & focus preserve)
+      const bindKey = e.target?.dataset?.bind;
+      const prevScrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      requestAnimationFrame(() => {
+        render();
+        const el = bindKey ? document.querySelector(`[data-bind="${bindKey}"]`) : null;
+        if (el) {
+          try {
+            el.focus({ preventScroll: true });
+            const L = el.value?.length ?? 0;
+            if (el.setSelectionRange) el.setSelectionRange(L, L);
+          } catch (err) {}
+        }
+        window.scrollTo(0, prevScrollTop);
+        if (calcCache) applyColors(calcCache);
+      });
+}
 
     // 저장 스케줄 & 색상 갱신(기존 동작 유지)
     scheduleSave();
