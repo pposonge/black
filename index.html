@@ -541,7 +541,7 @@ html[data-theme="dark"] .theme-toggle{border-color:#2d3a4b}
 
 <script>
 /* ---------- Constants ---------- */
-const DEFAULT_LEVELS=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+const DEFAULT_LEVELS=[1];
 const DEFAULT_ATTRS=["끈기(속도)","눈치(가속)","감각(회전)","완력(제동)","박력(사거리)","집중(정확도)","시야(각도)"];
 const LS_KEY="sailorapp_state_v10";
 const THEME_KEY="sailorapp_theme";
@@ -1046,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('calcBtn').addEventListener('click',()=>{ calcCache=compute(); applyColors(calcCache); });
   document.getElementById('addSectionBtn').addEventListener('click',()=>{
     const nm=prompt('새 구간 이름을 입력하세요','새 구간'); if(!nm||!nm.trim()) return;
-    const levels = Array.from({length:20},(_,i)=>i+1);
+    const levels = [1];
     const attrs=DEFAULT_ATTRS.slice();
     state.sections.push({name:nm.trim(),sort:null,base:makeBase(levels,attrs),input:makeInput()});
     render(); scheduleSave();
