@@ -284,6 +284,20 @@ html[data-theme="dark"] #presetSelect{background:#fff;color:#111;border-color:rg
   min-width:260px;justify-content:flex-start
 }
 .swatch{width:18px;height:18px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.15);cursor:pointer}
+
+/* Preset-dot per-row (added) */
+.preset-dots{min-width:72px}
+.preset-dot{
+  width:10px;
+  height:10px;
+  display:inline-block;
+  border-radius:50%;
+  margin-right:6px;
+  vertical-align:middle;
+  border:1px solid rgba(255,255,255,0.12);
+  box-shadow:0 0 0 1px rgba(0,0,0,0.06) inset;
+}
+
 html[data-theme="dark"] .swatch{border-color:#0b1220}
 .swatch[aria-selected="true"]{outline:2px solid #ffffff;outline-offset:2px}
 
@@ -856,7 +870,7 @@ function renderInputTable(sec,sidx){
   html+=`<th data-sort="level">레벨${indLevel}</th>`;
   html+=`<th class="onboard-col">탑승</th>`;
   vis.forEach(i=>{ const ind = sortIndicator(sec,i); html+=`<th data-sort="stat${i}">${escapeHtml(sec.base.attrs[i])}${ind}</th>`; });
-  html+='<th>작업</th></tr></thead><tbody>';
+  html+='<th>프리셋</th><th>작업</th></tr></thead><tbody>';
 
   if(sec.input.sailors.length===0)
     sec.input.sailors.push({name:'',level:'',stats:Array(sec.base.attrs.length).fill(''),checked:false,onboard:Array(state.presets.length).fill(false)});
@@ -879,6 +893,8 @@ function renderInputTable(sec,sidx){
       : `background:#fff;color:${color};border:1px solid ${color}`;
     html+=`<td><button class="btn star" style="${starStyle}" data-act="toggleOnboard" data-s="${sidx}" data-r="${ridx}">${inActive?'★':'☆'}</button></td>`;
     vis.forEach(i=>{const v=row.stats?.[i]??''; html+=`<td><input class="input" data-bind="sections.${sidx}.input.sailors.${ridx}.stats.${i}" value="${escapeHtml(v)}"/></td>`;});
+    const presetDots = (row.onboard||[]).map((v,i)=> v ? `<span class="preset-dot" title="${escapeHtml(state.presets[i]||'')}" style="background:${presetColor(i)}"></span>` : '').join('');
+    html+=`<td class="preset-dots">${presetDots}</td>`;
     html+=`<td class="actions-col"><button class="btn secondary" data-act="delRow" data-s="${sidx}" data-r="${ridx}">삭제</button> <button class="btn" data-act="toggleMark" data-s="${sidx}" data-r="${ridx}">${btnTxt}</button></td>`;
     html+=`</tr>`;
   });
