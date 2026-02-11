@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<!-- Help Drawer v2 (auto-contrast) injected by ChatGPT on 2025-11-02 -->
 <style>
   .help-icon-btn{
     min-width:36px; height:36px; padding:0;
@@ -147,8 +146,7 @@
     document.documentElement.classList.remove("help-open");
   }
 
-  // Export for compatibility
-  window.openReadme = openHelp;
+  // Export for compatibility - REMOVED window.openReadme to avoid conflict
   window.openHelpSlide = openHelp;
 
   document.addEventListener("DOMContentLoaded", function(){
@@ -218,7 +216,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>검은사막 선원관리 V3.0 (by.검은사막 라밤길드 ChaKanE)</title>
-<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚓</text></svg>'>
+<link rel="icon" href__='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⚓</text></svg>'>
 <style>
 /* ---------- THEME ---------- */
 :root{
@@ -497,7 +495,7 @@ html[data-theme="dark"] .theme-toggle{border-color:#2d3a4b}
 
         <button class="btn ghost" id="clearLocalBtn">완전초기화</button>
         <button class="btn theme-toggle" id="themeToggleActions" title="모드 전환" aria-label="모드 전환">◑</button>
-		<button class="top-btn" onclick="openReadme()" title="README 보기">📖</button>
+		<button class="btn" onclick="openReadme()" title="README 보기">📖</button>
       </div>
     </div>
   </div>
@@ -532,7 +530,7 @@ html[data-theme="dark"] .theme-toggle{border-color:#2d3a4b}
   <div class="modal-backdrop" data-close="base"></div>
   <div class="modal-card">
     <div class="modal-head">
-      <div id="baseTitle">베이스 설정<br>(레벨 범위 1~20)</br></div>
+      <div id="baseTitle">베이스 설정<br/>(레벨 범위 1~20)</div>
       <button class="modal-close" data-close="base">✕</button>
     </div>
     <div class="modal-body">
@@ -1045,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('loadBtn').addEventListener('click', ()=> document.getElementById('loadFile').click());
   document.getElementById('saveBtn').addEventListener('click',()=>{
     const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href__=URL.createObjectURL(blob);
     a.download=`검은사막 선원관리_${new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')}.json`;
     a.click(); URL.revokeObjectURL(a.href);
   });
@@ -1075,8 +1073,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
 
   // 모달 닫기 버튼 이벤트
-  document.querySelectorAll('[data-close=\"attrs\"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('attrs', false)));
-  document.querySelectorAll('[data-close=\"base\"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('base', false)));
+  document.querySelectorAll('[data-close="attrs"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('attrs', false)));
+  document.querySelectorAll('[data-close="base"]').forEach(el=> el.addEventListener('click', ()=> toggleModal('base', false)));
 
   injectPresetRowStyles();
   render();
@@ -1282,7 +1280,7 @@ function openBaseDialog(sidx){
     } catch (e) {
       body.innerHTML = `
         <p style="margin:0 0 8px;">앱 내 표시가 어려워 새 탭에서 여는 방식으로 전환합니다.</p>
-        <p><a href="https://pposonge.github.io/BDSM/README.md" target="_blank" rel="noopener noreferrer">README 새 탭으로 열기</a></p>`;
+        <p><a href__="https://pposonge.github.io/BDSM/README.md" target="_blank" rel="noopener noreferrer">README 새 탭으로 열기</a></p>`;
       console.error(e);
     }
   }
