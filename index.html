@@ -46,6 +46,14 @@
     }
     .help-drawer .help-header{ border-bottom-color: rgba(255,255,255,.08); background: linear-gradient(to bottom, rgba(255,255,255,0.04), rgba(255,255,255,0)); }
   }
+
+/* Collapsible Panel Styles */
+.panel-header-clickable { cursor: pointer; display: flex; align-items: center; gap: 8px; user-select: none; }
+.panel-header-clickable:hover { opacity: 0.8; }
+.panel-toggle-icon { font-size: 10px; transition: transform 0.2s; }
+.panel.collapsed .table-wrap { display: none; }
+.panel.collapsed .panel-toggle-icon { transform: rotate(-90deg); }
+
 </style>
 <script>
 (function(){
@@ -595,7 +603,7 @@ function escapeHtml(s){return String(s??'').replaceAll('&','&amp;').replaceAll('
 function clampName(s){const arr=[...String(s||'')];return (arr.length>NAME_MAX?arr.slice(0,NAME_MAX).join(''):s)||''}
 function makeBase(levels=DEFAULT_LEVELS,attrs=DEFAULT_ATTRS){return{levels:deepClone(levels),attrs:deepClone(attrs),enabledAttrs:Array(attrs.length).fill(true),values:Array.from({length:levels.length},()=>Array(attrs.length).fill(''))}}
 function makeInput(){return{sailors:[]}}
-function makeSection(name){return{name,sort:null,base:makeBase(),input:makeInput()}}
+function makeSection(name){return{name,sort:null,base:makeBase(),input:makeInput(),baseCollapsed:true}}
 function loadFromLocal(){try{const s=localStorage.getItem(LS_KEY);return s?JSON.parse(s):null}catch(e){return null}}
 function hexToRgb(hex){hex=hex.replace('#',''); if(hex.length===3) hex=[hex[0],hex[0],hex[1],hex[1],hex[2],hex[2]].join(''); const n=parseInt(hex,16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
 function softFrom(hex,alpha=.15){const {r,g,b}=hexToRgb(hex); return `rgba(${r},${g},${b},${alpha})`;}
@@ -625,6 +633,7 @@ function normalizeState(){
     if(!sec.input) { sec.input=makeInput(); migrated=true; }
     if(!Array.isArray(sec.input.sailors)) { sec.input.sailors=[]; migrated=true; }
     if(!sec.sort || (typeof sec.sort!=='object')) sec.sort=null;
+    if(sec.baseCollapsed === undefined) sec.baseCollapsed = true;
     sec.input.sailors.forEach(r=>{
       if(!Array.isArray(r.stats)) r.stats=[];
       while(r.stats.length<sec.base.attrs.length) r.stats.push('');
@@ -660,6 +669,7 @@ function bindSectionEvents(sectionEl, sidx){
       case 'rename': renameSection(sidx); break;
       case 'removeSection': removeSection(sidx); break;
       case 'clearMarks': clearMarks(); break;
+      case 'toggleBase': toggleBase(sidx); break;
       case 'delRow': if(ridx!==undefined) delRow(sidx, ridx); break;
       case 'toggleMark': if(ridx!==undefined) toggleMark(sidx, ridx); break;
       case 'toggleOnboard': if(ridx!==undefined) toggleOnboard(sidx, ridx); break;
@@ -713,8 +723,10 @@ function render(){
           <h3>선원 입력</h3>
           <div class="table-wrap">${renderInputTable(sec,sidx)}</div>
         </div>
-        <div class="panel">
-          <h3>선원 최고능력치</h3>
+        <div class="panel ${sec.baseCollapsed ? 'collapsed' : ''}">
+          <h3 class="panel-header-clickable" data-act="toggleBase" data-s="${sidx}">
+            <span class="panel-toggle-icon">▼</span> 선원 최고능력치
+          </h3>
           <div class="table-wrap">${renderBaseTable(sec,sidx)}</div>
         </div>
       </div>`;
@@ -920,6 +932,14 @@ function renderBaseTable(sec,sidx){
 }
 
 /* ---------- Row Ops ---------- */
+
+function toggleBase(sidx) {
+  state.sections[sidx].baseCollapsed = !state.sections[sidx].baseCollapsed;
+  scheduleSave();
+  render();
+  if(calcCache) applyColors(calcCache);
+}
+
 function addRow(s){
   const sec=state.sections[s]; const cols=sec.base.attrs.length;
   sec.input.sailors.push({name:'',level:'',stats:Array(cols).fill(''),checked:false,onboard:Array(state.presets.length).fill(false)});
